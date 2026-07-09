@@ -13,7 +13,7 @@ rules = [
 # the first deploy so later deploys reuse the same namespace.
 [[kv_namespaces]]
 binding = "STORE"
-# id = "<paste the STORE namespace id here after the first deploy>"
+id = "4c1501352cc640ac8c15c575b20ac5f0"
 
 # Secrets (set in Cloudflare -> Settings -> Variables and Secrets, never in the repo):
 #   SHOP_CLIENT_ID       Shopify app Client ID
