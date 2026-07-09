@@ -1,0 +1,24 @@
+# Wax Reorder Board - Cloudflare Worker config
+name = "wax-reorder-board"        # must match the GitHub repo name
+main = "worker.js"
+compatibility_date = "2026-06-01"
+
+# The page is bundled into the Worker as text.
+rules = [
+  { type = "Text", globs = ["**/*.html"], fallthrough = true }
+]
+
+# Shared store (KV): password hash, session key, Shopify tokens, reorder items.
+# id omitted so the first import auto-provisions it; pin the real id here after
+# the first deploy so later deploys reuse the same namespace.
+[[kv_namespaces]]
+binding = "STORE"
+# id = "<paste the STORE namespace id here after the first deploy>"
+
+# Secrets (set in Cloudflare -> Settings -> Variables and Secrets, never in the repo):
+#   SHOP_CLIENT_ID       Shopify app Client ID
+#   SHOP_CLIENT_SECRET   Shopify app Secret
+#   DASHBOARD_PASSCODE   optional override; normally the owner sets the password
+#                        on the first-run screen (hashed in KV)
+#   SESSION_SECRET       optional; auto-generated in KV on first run
+# EOF

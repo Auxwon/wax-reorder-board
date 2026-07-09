@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wax Reorder Board</title>
+<style>
+  :root{ --orange:#f15b28; --cream:#fff1e2; --ink:#111111; --muted:#8a7f74; --line:rgba(17,17,17,.12); --ok:#2f8f5b; --warn:#c98a1a; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--cream);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:var(--orange)}
+  .wrap{max-width:1000px;margin:0 auto;padding:20px 18px 80px}
+  header.top{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:4px}
+  h1{font-size:30px;margin:0;letter-spacing:-.5px}
+  .sub{color:var(--muted);font-size:14px}
+  .bar{background:var(--ink);height:5px;width:64px;border-radius:3px;margin:8px 0 18px}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .spacer{flex:1}
+  .badge{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;font-size:13px;font-weight:600;border:1px solid var(--line);background:#fffdf9}
+  .badge.spend{background:var(--ink);color:var(--cream);border-color:var(--ink)}
+  .badge.ok{color:var(--ok)} .badge.off{color:var(--muted)}
+  .card{background:#fffdf9;border:1px solid var(--line);border-radius:14px;padding:16px 16px;margin-bottom:14px}
+  .card h2{font-size:17px;margin:0 0 10px}
+  .btn{font:inherit;font-size:14px;font-weight:600;padding:9px 14px;border-radius:10px;border:1px solid var(--ink);background:var(--ink);color:var(--cream);cursor:pointer}
+  .btn.ghost{background:transparent;color:var(--ink)}
+  .btn.orange{background:var(--orange);border-color:var(--orange);color:#fff}
+  .btn.sm{padding:6px 10px;font-size:13px;border-radius:9px}
+  .btn:disabled{opacity:.5;cursor:default}
+  input,select,textarea{font:inherit;font-size:14px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink);width:100%}
+  label{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;display:block;margin:0 0 4px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 14px}
+  .tab{padding:7px 14px;border-radius:999px;border:1px solid var(--line);background:#fffdf9;cursor:pointer;font-size:14px;font-weight:600}
+  .tab.active{background:var(--ink);color:var(--cream);border-color:var(--ink)}
+  .item{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px;background:#fff}
+  .item .t{font-weight:700;font-size:15px}
+  .item .meta{color:var(--muted);font-size:13px;margin-top:2px}
+  .pill{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:3px 8px;border-radius:999px;margin-right:6px}
+  .p-to{background:#fde7dd;color:#b8501f} .p-or{background:#e9e2f6;color:#5a479c} .p-re{background:#e0f0e6;color:var(--ok)}
+  .sug{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line)}
+  .sug:first-child{border-top:none}
+  .sug .g{flex:1;min-width:0}
+  .sug .t{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lowdot{font-weight:700}
+  .muted{color:var(--muted)}
+  .hide{display:none!important}
+  .overlay{position:fixed;inset:0;background:var(--cream);display:flex;align-items:center;justify-content:center;z-index:50}
+  .box{width:90%;max-width:360px;background:#fffdf9;border:1px solid var(--line);border-radius:16px;padding:26px 22px}
+  .err{color:var(--orange);font-size:13px;min-height:16px;margin-top:8px}
+  .edit .grid{margin-top:8px}
+  .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--cream);padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .2s;z-index:60}
+  .toast.show{opacity:1}
+  @media(max-width:560px){h1{font-size:24px}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app" style="display:none">
+  <header class="top">
+    <h1>Wax Reorder Board</h1>
+    <span class="sub">what to reorder &middot; what's on order &middot; who ordered it</span>
+  </header>
+  <div class="bar"></div>
+
+  <div class="row" style="margin-bottom:16px">
+    <span class="badge spend" id="spend">On order: $0.00</span>
+    <span class="badge" id="shopStatus">Shopify: …</span>
+    <span class="spacer"></span>
+    <button class="btn ghost sm" id="logout">Log out</button>
+  </div>
+
+  <!-- Suggestions -->
+  <div class="card" id="sugCard">
+    <div class="row">
+      <h2 style="margin:0">Suggested reorders</h2>
+      <span class="spacer"></span>
+      <span class="muted" style="font-size:13px">sold in last 60 days &amp; low on stock</span>
+    </div>
+    <div id="sugConnect" class="hide" style="margin-top:12px">
+      <p class="muted" style="font-size:14px;margin:6px 0 12px">Connect Shopify (read-only) to see what's selling and running low, so nobody has to guess.</p>
+      <button class="btn orange" id="connectShop">Connect Shopify</button>
+    </div>
+    <div id="sugBody" class="hide" style="margin-top:12px">
+      <div class="row" style="margin-bottom:6px">
+        <label style="margin:0">Show items with stock at or below</label>
+        <input type="number" id="threshold" value="3" min="0" max="50" style="width:72px">
+        <button class="btn ghost sm" id="refreshSug">Refresh</button>
+      </div>
+      <div id="sugList"></div>
+    </div>
+  </div>
+
+  <!-- Add manual -->
+  <div class="card">
+    <h2>Add something to reorder</h2>
+    <div class="grid">
+      <div style="grid-column:1/-1"><label>Item</label><input id="f_title" placeholder="e.g. LP outer sleeves (pack of 22)"></div>
+      <div><label>Supplier</label><select id="f_supplier"></select></div>
+      <div><label>Qty</label><input id="f_qty" type="number" value="1" min="0"></div>
+      <div><label>Unit cost ($)</label><input id="f_cost" type="number" value="0" min="0" step="0.01"></div>
+      <div><label>Note (optional)</label><input id="f_note" placeholder="optional"></div>
+    </div>
+    <div class="row" style="margin-top:12px"><button class="btn orange" id="addBtn">Add to list</button></div>
+    <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
+      <label>Suppliers</label>
+      <div class="row" style="gap:6px"><span id="supChips" class="row" style="gap:6px"></span>
+      <input id="newSup" placeholder="add a supplier" style="width:150px">
+      <button class="btn ghost sm" id="addSupBtn">Add</button></div>
+    </div>
+  </div>
+
+  <!-- List -->
+  <div class="tabs" id="tabs">
+    <div class="tab active" data-f="to_order">To order <span id="c_to"></span></div>
+    <div class="tab" data-f="ordered">Ordered <span id="c_or"></span></div>
+    <div class="tab" data-f="received">Received <span id="c_re"></span></div>
+    <div class="tab" data-f="all">All</div>
+  </div>
+  <div id="list"></div>
+  <p class="muted" id="empty" style="text-align:center;padding:24px 0">Nothing here yet.</p>
+</div>
+
+<!-- Auth gate -->
+<div class="overlay" id="gate">
+  <div class="box">
+    <h1 id="gateTitle" style="font-size:26px;margin:0 0 6px">Wax Reorder Board</h1>
+    <p class="muted" id="gateSub" style="font-size:14px;margin:0 0 16px">Enter the password.</p>
+    <form id="gateForm"><input id="gatePass" type="password" placeholder="Password" autocomplete="current-password">
+    <button class="btn orange" type="submit" style="width:100%;margin-top:12px" id="gateBtn">Sign in</button>
+    <div class="err" id="gateErr"></div></form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+var state={items:[],shop:{connected:false},committed:0,suppliers:[]};
+var filter='to_order';
+function supOptions(sel){var o='<option value="">— supplier —</option>';(state.suppliers||[]).forEach(function(s){o+='<option value="'+esc(s)+'"'+(s===sel?' selected':'')+'>'+esc(s)+'</option>';});return o;}
+function renderSuppliers(){
+  var sel=$('f_supplier');if(sel)sel.innerHTML=supOptions(sel.value);
+  var chips=$('supChips');if(chips){chips.innerHTML='';(state.suppliers||[]).forEach(function(s){var c=document.createElement('span');c.className='pill p-or';c.style.cursor='default';c.innerHTML=esc(s)+' <a href="#" style="text-decoration:none" title="remove">×</a>';c.querySelector('a').onclick=function(e){e.preventDefault();if(confirm('Remove supplier "'+s+'"?'))api('/api/suppliers','POST',{action:'remove',name:s}).then(function(r){state.suppliers=r.suppliers||[];renderSuppliers();});};chips.appendChild(c);});}
+}
+function $(id){return document.getElementById(id);}
+function esc(s){return (s==null?'':String(s)).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function money(n){return '$'+(Number(n)||0).toFixed(2);}
+function toast(m){var t=$('toast');t.textContent=m;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},1600);}
+function api(path,method,body){return fetch(path,{method:method||'GET',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined}).then(function(r){if(r.status===401){showGate();throw new Error('auth');}return r.json();});}
+
+/* ---- gate ---- */
+function showGate(setup){$('app').style.display='none';$('gate').style.display='flex';
+  $('gateTitle').textContent=setup?'Set a password':'Wax Reorder Board';
+  $('gateSub').textContent=setup?'Choose a password for the board — your team will use it to open this page (at least 6 characters).':'Enter the password.';
+  $('gateBtn').textContent=setup?'Set password':'Sign in';
+  $('gatePass').setAttribute('autocomplete',setup?'new-password':'current-password');
+  $('gateForm').setAttribute('data-mode',setup?'setup':'login');}
+function hideGate(){$('gate').style.display='none';$('app').style.display='block';}
+$('gateForm').onsubmit=function(e){e.preventDefault();var mode=this.getAttribute('data-mode');var pass=$('gatePass').value;$('gateErr').textContent='';
+  fetch(mode==='setup'?'/api/setup':'/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({passcode:pass})})
+    .then(function(r){return r.json().then(function(j){return{ok:r.ok,j:j};});})
+    .then(function(o){if(o.ok){hideGate();load();}else{$('gateErr').textContent=(o.j&&o.j.error==='too_short')?'At least 6 characters.':(mode==='setup'?'Could not set password.':'That password did not match.');}})
+    .catch(function(){$('gateErr').textContent='Something went wrong. Try again.';});};
+
+function boot(){api('/api/gate').then(function(g){if(!g.passcodeSet){showGate(true);}else if(!g.loggedIn){showGate(false);}else{hideGate();load();}}).catch(function(){showGate(false);});}
+
+/* ---- load + render ---- */
+function load(){api('/api/state').then(function(s){state=s;render();}).catch(function(){});}
+function counts(){var c={to_order:0,ordered:0,received:0};state.items.forEach(function(i){if(c[i.status]!=null)c[i.status]++;});return c;}
+function render(){
+  $('spend').textContent='On order: '+money(state.committed);
+  renderSuppliers();
+  var sc=$('shopStatus');
+  if(state.shop&&state.shop.connected){sc.textContent='Shopify: '+(state.shop.name||'connected');sc.className='badge ok';$('sugConnect').classList.add('hide');$('sugBody').classList.remove('hide');}
+  else{sc.textContent='Shopify: not connected';sc.className='badge off';$('sugConnect').classList.remove('hide');$('sugBody').classList.add('hide');}
+  var c=counts();$('c_to').textContent='('+c.to_order+')';$('c_or').textContent='('+c.ordered+')';$('c_re').textContent='('+c.received+')';
+  var items=state.items.filter(function(i){return filter==='all'?true:i.status===filter;});
+  var box=$('list');box.innerHTML='';
+  $('empty').style.display=items.length?'none':'block';
+  items.forEach(function(i){box.appendChild(itemEl(i));});
+}
+function statusPill(s){if(s==='ordered')return '<span class="pill p-or">Ordered</span>';if(s==='received')return '<span class="pill p-re">Received</span>';return '<span class="pill p-to">To order</span>';}
+function itemEl(i){
+  var d=document.createElement('div');d.className='item';
+  var line=(Number(i.qty)||0)*(Number(i.unitCost)||0);
+  var sub=[];
+  if(i.variantTitle)sub.push(esc(i.variantTitle));
+  if(i.sku)sub.push('SKU '+esc(i.sku));
+  if(i.supplier)sub.push('from '+esc(i.supplier));
+  var money2=(i.qty||0)+' × '+money(i.unitCost)+' = '+money(line);
+  var who=i.orderedBy?(' &middot; by '+esc(i.orderedBy)):'';
+  var eta=i.eta?(' &middot; ETA '+esc(i.eta)):'';
+  var note=i.note?('<div class="meta">'+esc(i.note)+'</div>'):'';
+  d.innerHTML=statusPill(i.status)+'<span class="t">'+esc(i.title)+'</span>'+
+    '<div class="meta">'+(sub.length?sub.join(' &middot; ')+' &middot; ':'')+money2+who+eta+'</div>'+note+
+    '<div class="row" style="margin-top:10px"></div>';
+  var actions=d.querySelector('.row');
+  if(i.status==='to_order')actions.appendChild(btn('Mark ordered','orange sm',function(){markOrdered(i);}));
+  if(i.status==='ordered')actions.appendChild(btn('Mark received','sm',function(){upd(i.id,{status:'received'});}));
+  if(i.status==='received')actions.appendChild(btn('Back to ordered','ghost sm',function(){upd(i.id,{status:'ordered'});}));
+  actions.appendChild(btn('Edit','ghost sm',function(){editRow(d,i);}));
+  actions.appendChild(btn('Delete','ghost sm',function(){if(confirm('Remove this item?'))del(i.id);}));
+  return d;
+}
+function btn(txt,cls,fn){var b=document.createElement('button');b.className='btn '+cls;b.textContent=txt;b.onclick=fn;return b;}
+function editRow(d,i){
+  if(d.querySelector('.edit'))return;
+  var e=document.createElement('div');e.className='edit';
+  e.innerHTML='<div class="grid">'+
+    '<div><label>Supplier</label><select id="e_sup">'+supOptions(i.supplier)+'</select></div>'+fld('Qty','e_qty',i.qty,'number')+fld('Unit cost ($)','e_cost',i.unitCost,'number')+
+    fld('Ordered by','e_by',i.orderedBy)+fld('ETA','e_eta',i.eta)+fld('Note','e_note',i.note)+'</div>'+
+    '<div class="row" style="margin-top:10px"></div>';
+  var r=e.querySelector('.row');
+  r.appendChild(btn('Save','orange sm',function(){upd(i.id,{supplier:e.querySelector('#e_sup').value,qty:e.querySelector('#e_qty').value,unitCost:e.querySelector('#e_cost').value,orderedBy:e.querySelector('#e_by').value,eta:e.querySelector('#e_eta').value,note:e.querySelector('#e_note').value});}));
+  r.appendChild(btn('Cancel','ghost sm',function(){e.remove();}));
+  d.appendChild(e);
+}
+function fld(label,id,val,type){return '<div><label>'+label+'</label><input id="'+id+'" type="'+(type||'text')+'" value="'+esc(val)+'"></div>';}
+function markOrdered(i){
+  var by=prompt('Who is placing this order? (your name)',i.orderedBy||'');
+  if(by===null)return;
+  var sup=i.supplier||prompt('Supplier (optional)','')||'';
+  upd(i.id,{status:'ordered',orderedBy:by,supplier:sup});
+}
+function upd(id,changes){changes.id=id;api('/api/items/update','POST',changes).then(function(){toast('Saved');load();});}
+function del(id){api('/api/items/delete','POST',{id:id}).then(function(){toast('Removed');load();});}
+
+/* ---- add manual ---- */
+$('addBtn').onclick=function(){
+  var t=$('f_title').value.trim();if(!t){$('f_title').focus();return;}
+  api('/api/items','POST',{title:t,supplier:$('f_supplier').value,qty:$('f_qty').value,unitCost:$('f_cost').value,note:$('f_note').value,source:'manual'})
+    .then(function(){$('f_title').value='';$('f_supplier').value='';$('f_qty').value='1';$('f_cost').value='0';$('f_note').value='';toast('Added');load();});
+};
+
+$('addSupBtn').onclick=function(){var n=$('newSup').value.trim();if(!n)return;api('/api/suppliers','POST',{action:'add',name:n}).then(function(r){state.suppliers=r.suppliers||[];$('newSup').value='';renderSuppliers();toast('Supplier added');});};
+
+/* ---- suggestions ---- */
+$('connectShop').onclick=function(){window.location.href='/auth/shop/start';};
+$('refreshSug').onclick=loadSug;
+function loadSug(){
+  var th=$('threshold').value||3;
+  $('sugList').innerHTML='<p class="muted" style="padding:8px 0">Reading Shopify…</p>';
+  api('/api/suggestions?threshold='+encodeURIComponent(th)).then(function(r){
+    if(r.error){$('sugList').innerHTML='<p class="muted">'+esc(r.plain||'Could not load suggestions.')+'</p>';return;}
+    if(!r.items.length){$('sugList').innerHTML='<p class="muted" style="padding:8px 0">Nothing at or below that level right now.</p>';return;}
+    $('sugList').innerHTML='';
+    r.items.forEach(function(s){
+      var row=document.createElement('div');row.className='sug';
+      var low=s.inv<=0?'#c0392b':(s.inv<=2?'#c98a1a':'#8a7f74');
+      row.innerHTML='<div class="g"><div class="t">'+esc(s.title)+(s.variantTitle?(' — '+esc(s.variantTitle)):'')+'</div>'+
+        '<div class="meta"><span class="lowdot" style="color:'+low+'">'+s.inv+' in stock</span> &middot; sold '+s.sold+' in 60d'+(s.vendor?(' &middot; '+esc(s.vendor)):'')+(s.sku?(' &middot; '+esc(s.sku)):'')+'</div></div>';
+      var b=btn('Add','sm',function(){addFromSug(s,b);});
+      row.appendChild(b);
+      $('sugList').appendChild(row);
+    });
+  }).catch(function(){$('sugList').innerHTML='<p class="muted">Could not load suggestions.</p>';});
+}
+function addFromSug(s,b){
+  b.disabled=true;b.textContent='Added';
+  api('/api/items','POST',{title:s.title,variantTitle:s.variantTitle,sku:s.sku,supplier:s.vendor,qty:1,unitCost:0,source:'shopify'}).then(function(){toast('Added to list');load();});
+}
+
+/* tabs */
+Array.prototype.forEach.call(document.querySelectorAll('.tab'),function(t){t.onclick=function(){Array.prototype.forEach.call(document.querySelectorAll('.tab'),function(x){x.classList.remove('active');});t.classList.add('active');filter=t.getAttribute('data-f');render();};});
+$('logout').onclick=function(){api('/api/logout','POST').then(function(){showGate(false);});};
+
+/* auto-load suggestions when shop connected */
+var sugLoadedOnce=false;
+var _render=render;render=function(){_render();if(state.shop&&state.shop.connected&&!sugLoadedOnce){sugLoadedOnce=true;loadSug();}};
+
+boot();
+</script>
+</body>
+</html>
