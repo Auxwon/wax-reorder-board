@@ -176,7 +176,7 @@ async function shopName(env) {
    at or below the threshold, busiest sellers first. */
 async function shopSuggestions(env, threshold) {
   const since = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
-  const q = 'query($cursor:String){ orders(first:60, sortKey:CREATED_AT, query:"created_at:>=' + since + ' -status:cancelled", after:$cursor){ pageInfo{ hasNextPage endCursor } nodes{ lineItems(first:50){ nodes{ quantity sku title variant{ id sku title inventoryQuantity product{ title vendor } } } } } } }';
+  const q = 'query($cursor:String){ orders(first:60, sortKey:CREATED_AT, query:"created_at:>=' + since + ' -status:cancelled", after:$cursor){ pageInfo{ hasNextPage endCursor } nodes{ lineItems(first:50){ nodes{ quantity sku title variant{ id sku title inventoryQuantity product{ title vendor isGiftCard productType } } } } } } }';
   const agg = {};
   let cursor = null, pages = 0;
   do {
@@ -185,7 +185,7 @@ async function shopSuggestions(env, threshold) {
     for (const o of (orders.nodes || [])) {
       for (const li of ((o.lineItems && o.lineItems.nodes) || [])) {
         const v = li.variant; if (!v || !v.id) continue;
-        const e = agg[v.id] || { sold: 0, inv: v.inventoryQuantity, title: (v.product && v.product.title) || li.title || 'Item', variantTitle: (v.title && v.title !== 'Default Title') ? v.title : '', sku: v.sku || li.sku || '', vendor: (v.product && v.product.vendor) || '' };
+        const e = agg[v.id] || { sold: 0, inv: v.inventoryQuantity, title: (v.product && v.product.title) || li.title || 'Item', variantTitle: (v.title && v.title !== 'Default Title') ? v.title : '', sku: v.sku || li.sku || '', vendor: (v.product && v.product.vendor) || '', giftCard: !!(v.product && v.product.isGiftCard), productType: (v.product && v.product.productType) || '' };
         e.sold += (li.quantity || 0);
         if (typeof v.inventoryQuantity === 'number') e.inv = v.inventoryQuantity;
         agg[v.id] = e;
@@ -195,8 +195,12 @@ async function shopSuggestions(env, threshold) {
     pages++;
   } while (cursor && pages < 14);
   const th = (typeof threshold === 'number' && threshold >= 0) ? threshold : 3;
+  /* Drop non-reorderable noise: gift cards/vouchers and the used/secondhand bulk
+     bins (which run on big negative stock and aren't restocked from a supplier). */
+  const NOISE_RE = /gift\s?(card|voucher)|voucher|second\s?hand|secondhand|used bin|\$\d+\s?bin/i;
   return Object.keys(agg).map((id) => Object.assign({ id }, agg[id]))
-    .filter((e) => typeof e.inv === 'number' && e.inv <= th)
+    .filter((e) => typeof e.inv === 'number' && e.inv <= th &&
+      !e.giftCard && !NOISE_RE.test(e.title || '') && !/gift ?card/i.test(e.productType || ''))
     .sort((a, b) => (b.sold - a.sold) || (a.inv - b.inv))
     .slice(0, 60);
 }
