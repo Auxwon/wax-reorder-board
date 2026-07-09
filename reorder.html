@@ -115,6 +115,10 @@
     <div class="tab" data-f="received">Received <span id="c_re"></span></div>
     <div class="tab" data-f="all">All</div>
   </div>
+  <div class="row" style="margin:-4px 0 14px">
+    <button class="btn ghost sm" id="groupBtn">Group by supplier</button>
+    <button class="btn ghost sm" id="exportAllBtn">Export CSV</button>
+  </div>
   <div id="list"></div>
   <p class="muted" id="empty" style="text-align:center;padding:24px 0">Nothing here yet.</p>
 </div>
@@ -135,6 +139,7 @@
 <script>
 var state={items:[],shop:{connected:false},committed:0,suppliers:[]};
 var filter='to_order';
+var groupMode=false;
 function supOptions(sel){var o='<option value="">— supplier —</option>';(state.suppliers||[]).forEach(function(s){o+='<option value="'+esc(s)+'"'+(s===sel?' selected':'')+'>'+esc(s)+'</option>';});return o;}
 function renderSuppliers(){
   var sel=$('f_supplier');if(sel)sel.innerHTML=supOptions(sel.value);
@@ -175,8 +180,37 @@ function render(){
   var items=state.items.filter(function(i){return filter==='all'?true:i.status===filter;});
   var box=$('list');box.innerHTML='';
   $('empty').style.display=items.length?'none':'block';
-  items.forEach(function(i){box.appendChild(itemEl(i));});
+  if(groupMode){renderGrouped(box,items);}else{items.forEach(function(i){box.appendChild(itemEl(i));});}
 }
+function renderGrouped(box,items){
+  var groups={},order=[];
+  items.forEach(function(i){var k=i.supplier||'(no supplier)';if(!groups[k]){groups[k]=[];order.push(k);}groups[k].push(i);});
+  order.sort(function(a,b){return a.localeCompare(b);});
+  order.forEach(function(k){
+    var g=groups[k];
+    var sub=g.reduce(function(s,i){return s+(Number(i.qty)||0)*(Number(i.unitCost)||0);},0);
+    var h=document.createElement('div');h.className='row';h.style.margin='18px 0 8px';
+    h.innerHTML='<h2 style="margin:0">'+esc(k)+'</h2><span class="muted" style="font-size:13px">'+g.length+' item'+(g.length===1?'':'s')+' &middot; '+money(sub)+'</span>';
+    var sp=document.createElement('span');sp.className='spacer';h.appendChild(sp);
+    h.appendChild(btn('Export CSV','sm',function(){download('reorder-'+slug(k)+'.csv',itemsToCsv(g));}));
+    box.appendChild(h);
+    g.forEach(function(i){box.appendChild(itemEl(i));});
+  });
+}
+function slug(s){return String(s).replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'items';}
+function statusLabel(s){return s==='ordered'?'Ordered':(s==='received'?'Received':'To order');}
+function csvCell(v){v=(v==null?'':String(v));return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}
+function itemsToCsv(items){
+  var head=['Item','Variant','SKU','Supplier','Qty','Unit cost','Line total','Status','Ordered by','ETA','Note'];
+  var rows=[head.join(',')];
+  items.forEach(function(i){
+    var line=(Number(i.qty)||0)*(Number(i.unitCost)||0);
+    rows.push([i.title,i.variantTitle,i.sku,i.supplier,i.qty,Number(i.unitCost||0).toFixed(2),line.toFixed(2),statusLabel(i.status),i.orderedBy,i.eta,i.note].map(csvCell).join(','));
+  });
+  return rows.join('\r\n');
+}
+function download(name,text){var b=new Blob(['﻿'+text],{type:'text/csv;charset=utf-8;'});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(a.href);},120);}
+function exportAll(){var items=state.items.filter(function(i){return filter==='all'?true:i.status===filter;});if(!items.length){toast('Nothing to export');return;}items=items.slice().sort(function(a,b){return (a.supplier||'').localeCompare(b.supplier||'');});download('reorder-list.csv',itemsToCsv(items));toast('Exported');}
 function statusPill(s){if(s==='ordered')return '<span class="pill p-or">Ordered</span>';if(s==='received')return '<span class="pill p-re">Received</span>';return '<span class="pill p-to">To order</span>';}
 function itemEl(i){
   var d=document.createElement('div');d.className='item';
@@ -261,6 +295,8 @@ function addFromSug(s,b){
 /* tabs */
 Array.prototype.forEach.call(document.querySelectorAll('.tab'),function(t){t.onclick=function(){Array.prototype.forEach.call(document.querySelectorAll('.tab'),function(x){x.classList.remove('active');});t.classList.add('active');filter=t.getAttribute('data-f');render();};});
 $('logout').onclick=function(){api('/api/logout','POST').then(function(){showGate(false);});};
+$('groupBtn').onclick=function(){groupMode=!groupMode;$('groupBtn').textContent=groupMode?'Ungroup':'Group by supplier';$('groupBtn').classList.toggle('orange',groupMode);render();};
+$('exportAllBtn').onclick=exportAll;
 
 /* auto-load suggestions when shop connected */
 var sugLoadedOnce=false;
