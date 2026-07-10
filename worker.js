@@ -174,8 +174,9 @@ async function shopName(env) {
 /* "What sold and is now low": walk orders (last 60d), sum sold per variant and
    read each variant's current inventory in the same pass, then keep the ones
    at or below the threshold, busiest sellers first. */
-async function shopSuggestions(env, threshold) {
-  const since = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
+async function shopSuggestions(env, threshold, days) {
+  const win = [30, 60, 90].indexOf(days) >= 0 ? days : 60;
+  const since = new Date(Date.now() - win * 86400000).toISOString().slice(0, 10);
   const q = 'query($cursor:String){ orders(first:60, sortKey:CREATED_AT, query:"created_at:>=' + since + ' -status:cancelled", after:$cursor){ pageInfo{ hasNextPage endCursor } nodes{ lineItems(first:50){ nodes{ quantity sku title variant{ id sku title inventoryQuantity product{ title vendor isGiftCard productType } } } } } } }';
   const agg = {};
   let cursor = null, pages = 0;
@@ -193,7 +194,7 @@ async function shopSuggestions(env, threshold) {
     }
     cursor = orders.pageInfo && orders.pageInfo.hasNextPage ? orders.pageInfo.endCursor : null;
     pages++;
-  } while (cursor && pages < 14);
+  } while (cursor && pages < 24);
   const th = (typeof threshold === 'number' && threshold >= 0) ? threshold : 3;
   /* Drop non-reorderable noise: gift cards/vouchers and the used/secondhand bulk
      bins (which run on big negative stock and aren't restocked from a supplier). */
@@ -202,7 +203,7 @@ async function shopSuggestions(env, threshold) {
     .filter((e) => typeof e.inv === 'number' && e.inv <= th &&
       !e.giftCard && !NOISE_RE.test(e.title || '') && !/gift ?card/i.test(e.productType || ''))
     .sort((a, b) => (b.sold - a.sold) || (a.inv - b.inv))
-    .slice(0, 60);
+    .slice(0, 150);
 }
 
 /* ---------------- reorder items store ---------------- */
@@ -287,7 +288,8 @@ async function apiDeleteItem(env, request) {
 async function apiSuggestions(env, url) {
   if (!(await shopToken(env))) return json({ error: 'shop_not_connected' }, 400);
   const th = Math.max(0, Math.min(50, parseInt(url.searchParams.get('threshold') || '3', 10)));
-  try { return json({ items: await shopSuggestions(env, th), threshold: th }); }
+  const days = parseInt(url.searchParams.get('days') || '60', 10);
+  try { return json({ items: await shopSuggestions(env, th, days), threshold: th, days: days }); }
   catch (e) { return json({ error: 'shopify', plain: 'Couldn’t read Shopify just now. Try again in a moment.' }, e.status || 500); }
 }
 

@@ -80,9 +80,17 @@
       <button class="btn orange" id="connectShop">Connect Shopify</button>
     </div>
     <div id="sugBody" class="hide" style="margin-top:12px">
-      <div class="row" style="margin-bottom:6px">
-        <label style="margin:0">Show items with stock at or below</label>
-        <input type="number" id="threshold" value="3" min="0" max="50" style="width:72px">
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:8px">
+        <div><label>Stock at or below</label><input type="number" id="threshold" value="3" min="0" max="50"></div>
+        <div><label>Sold in last</label><select id="days"><option value="30">30 days</option><option value="60" selected>60 days</option><option value="90">90 days</option></select></div>
+        <div><label>Sold at least</label><input type="number" id="minsold" value="1" min="0"></div>
+        <div><label>Sort by</label><select id="sugsort"><option value="sold">Busiest sellers</option><option value="stock">Lowest stock</option><option value="az">A–Z</option></select></div>
+        <div style="grid-column:1/-1"><label>Search</label><input id="sugsearch" placeholder="artist, title, label, SKU…"></div>
+      </div>
+      <div class="row" style="margin-bottom:8px">
+        <label style="display:flex;align-items:center;gap:6px;text-transform:none;font-weight:500;color:var(--ink);margin:0"><input type="checkbox" id="hidelisted" style="width:auto" checked> Hide items already on my list</label>
+        <span class="spacer"></span>
+        <span class="muted" id="sugCount" style="font-size:13px"></span>
         <button class="btn ghost sm" id="refreshSug">Refresh</button>
       </div>
       <div id="sugList"></div>
@@ -168,7 +176,7 @@ $('gateForm').onsubmit=function(e){e.preventDefault();var mode=this.getAttribute
 function boot(){api('/api/gate').then(function(g){if(!g.passcodeSet){showGate(true);}else if(!g.loggedIn){showGate(false);}else{hideGate();load();}}).catch(function(){showGate(false);});}
 
 /* ---- load + render ---- */
-function load(){api('/api/state').then(function(s){state=s;render();}).catch(function(){});}
+function load(){return api('/api/state').then(function(s){state=s;render();}).catch(function(){});}
 function counts(){var c={to_order:0,ordered:0,received:0};state.items.forEach(function(i){if(c[i.status]!=null)c[i.status]++;});return c;}
 function render(){
   $('spend').textContent='On order: '+money(state.committed);
@@ -268,28 +276,45 @@ $('addSupBtn').onclick=function(){var n=$('newSup').value.trim();if(!n)return;ap
 
 /* ---- suggestions ---- */
 $('connectShop').onclick=function(){window.location.href='/auth/shop/start';};
+var sugRaw=[],sugDays=60;
 $('refreshSug').onclick=loadSug;
+['minsold','sugsort','sugsearch','hidelisted'].forEach(function(id){var e=$(id);e.oninput=renderSug;e.onchange=renderSug;});
+$('threshold').onchange=loadSug;$('days').onchange=loadSug;
 function loadSug(){
-  var th=$('threshold').value||3;
-  $('sugList').innerHTML='<p class="muted" style="padding:8px 0">Reading Shopify…</p>';
-  api('/api/suggestions?threshold='+encodeURIComponent(th)).then(function(r){
-    if(r.error){$('sugList').innerHTML='<p class="muted">'+esc(r.plain||'Could not load suggestions.')+'</p>';return;}
-    if(!r.items.length){$('sugList').innerHTML='<p class="muted" style="padding:8px 0">Nothing at or below that level right now.</p>';return;}
-    $('sugList').innerHTML='';
-    r.items.forEach(function(s){
-      var row=document.createElement('div');row.className='sug';
-      var low=s.inv<=0?'#c0392b':(s.inv<=2?'#c98a1a':'#8a7f74');
-      row.innerHTML='<div class="g"><div class="t">'+esc(s.title)+(s.variantTitle?(' — '+esc(s.variantTitle)):'')+'</div>'+
-        '<div class="meta"><span class="lowdot" style="color:'+low+'">'+s.inv+' in stock</span> &middot; sold '+s.sold+' in 60d'+(s.vendor?(' &middot; '+esc(s.vendor)):'')+(s.sku?(' &middot; '+esc(s.sku)):'')+'</div></div>';
-      var b=btn('Add','sm',function(){addFromSug(s,b);});
-      row.appendChild(b);
-      $('sugList').appendChild(row);
-    });
-  }).catch(function(){$('sugList').innerHTML='<p class="muted">Could not load suggestions.</p>';});
+  var th=$('threshold').value||3; sugDays=parseInt($('days').value,10)||60;
+  $('sugList').innerHTML='<p class="muted" style="padding:8px 0">Reading Shopify…</p>';$('sugCount').textContent='';
+  api('/api/suggestions?threshold='+encodeURIComponent(th)+'&days='+encodeURIComponent(sugDays)).then(function(r){
+    if(r.error){sugRaw=[];$('sugList').innerHTML='<p class="muted">'+esc(r.plain||'Could not load suggestions.')+'</p>';return;}
+    sugRaw=r.items||[];renderSug();
+  }).catch(function(){sugRaw=[];$('sugList').innerHTML='<p class="muted">Could not load suggestions.</p>';});
+}
+function onList(s){return (state.items||[]).some(function(i){return (s.sku&&i.sku&&i.sku===s.sku)||(i.title&&s.title&&i.title.toLowerCase()===s.title.toLowerCase()&&(i.variantTitle||'')===(s.variantTitle||''));});}
+function renderSug(){
+  var min=parseInt($('minsold').value||'0',10)||0;
+  var q=($('sugsearch').value||'').trim().toLowerCase();
+  var hide=$('hidelisted').checked;var sort=$('sugsort').value;
+  var arr=sugRaw.filter(function(s){
+    if((s.sold||0)<min)return false;
+    if(hide&&onList(s))return false;
+    if(q){var hay=((s.title||'')+' '+(s.variantTitle||'')+' '+(s.vendor||'')+' '+(s.sku||'')).toLowerCase();if(hay.indexOf(q)<0)return false;}
+    return true;
+  });
+  arr.sort(function(a,b){if(sort==='stock')return a.inv-b.inv;if(sort==='az')return (a.title||'').localeCompare(b.title||'');return (b.sold-a.sold)||(a.inv-b.inv);});
+  $('sugCount').textContent=arr.length+' shown';
+  var box=$('sugList');box.innerHTML='';
+  if(!arr.length){box.innerHTML='<p class="muted" style="padding:8px 0">Nothing matches those filters.</p>';return;}
+  arr.forEach(function(s){
+    var row=document.createElement('div');row.className='sug';
+    var low=s.inv<=0?'#c0392b':(s.inv<=2?'#c98a1a':'#8a7f74');
+    row.innerHTML='<div class="g"><div class="t">'+esc(s.title)+(s.variantTitle?(' — '+esc(s.variantTitle)):'')+'</div>'+
+      '<div class="meta"><span class="lowdot" style="color:'+low+'">'+s.inv+' in stock</span> &middot; sold '+s.sold+' in '+sugDays+'d'+(s.vendor?(' &middot; '+esc(s.vendor)):'')+(s.sku?(' &middot; '+esc(s.sku)):'')+'</div></div>';
+    var b=btn('Add','sm',function(){addFromSug(s,b);});
+    row.appendChild(b);box.appendChild(row);
+  });
 }
 function addFromSug(s,b){
   b.disabled=true;b.textContent='Added';
-  api('/api/items','POST',{title:s.title,variantTitle:s.variantTitle,sku:s.sku,supplier:s.vendor,qty:1,unitCost:0,source:'shopify'}).then(function(){toast('Added to list');load();});
+  api('/api/items','POST',{title:s.title,variantTitle:s.variantTitle,sku:s.sku,supplier:'',qty:1,unitCost:0,note:s.vendor?('Label: '+s.vendor):'',source:'shopify'}).then(function(){toast('Added to list');load().then(renderSug);});
 }
 
 /* tabs */
