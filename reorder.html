@@ -99,6 +99,16 @@
     </div>
   </div>
 
+  <!-- Search all products -->
+  <div class="card" id="searchCard">
+    <div class="row"><h2 style="margin:0">Search all products</h2><span class="spacer"></span><span class="muted" style="font-size:13px">find any title in your Shopify catalogue</span></div>
+    <div class="row" style="margin-top:12px">
+      <input id="prodq" placeholder="artist, title or keyword…" style="flex:1;min-width:180px">
+      <button class="btn orange sm" id="prodBtn">Search</button>
+    </div>
+    <div id="prodList" style="margin-top:10px"></div>
+  </div>
+
   <!-- Add manual -->
   <div class="card">
     <h2>Add something to reorder</h2>
@@ -332,6 +342,30 @@ function renderSug(){
 function addFromSug(s,b){
   b.disabled=true;b.textContent='Added';
   api('/api/items','POST',{title:s.title,variantTitle:s.variantTitle,sku:s.sku,supplier:'',qty:1,unitCost:0,note:s.vendor?('Label: '+s.vendor):'',source:'shopify'}).then(function(){toast('Added to list');load().then(renderSug);});
+}
+
+/* ---- search all products ---- */
+$('prodBtn').onclick=doProdSearch;
+$('prodq').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();doProdSearch();}});
+function doProdSearch(){
+  var q=$('prodq').value.trim();
+  if(q.length<2){$('prodList').innerHTML='<p class="muted" style="padding:8px 0">Type at least 2 characters.</p>';return;}
+  $('prodList').innerHTML='<p class="muted" style="padding:8px 0">Searching…</p>';
+  api('/api/product-search?q='+encodeURIComponent(q)).then(function(r){
+    if(r.error){$('prodList').innerHTML='<p class="muted">'+esc(r.plain||'Connect Shopify first to search.')+'</p>';return;}
+    if(!r.items.length){$('prodList').innerHTML='<p class="muted" style="padding:8px 0">No products matched. Try fewer or different words.</p>';return;}
+    $('prodList').innerHTML='';
+    r.items.forEach(function(s){
+      var row=document.createElement('div');row.className='sug';
+      var invtxt=(s.inv==null?'stock n/a':s.inv+' in stock');
+      var col=(s.inv==null?'#8a7f74':(s.inv<=0?'#c0392b':(s.inv<=2?'#c98a1a':'#2f8f5b')));
+      var listed=onList(s)?' &middot; <span style="color:#5a479c">on your list</span>':'';
+      row.innerHTML='<div class="g"><div class="t">'+esc(s.title)+(s.variantTitle?(' — '+esc(s.variantTitle)):'')+'</div>'+
+        '<div class="meta"><span class="lowdot" style="color:'+col+'">'+invtxt+'</span>'+(s.vendor?(' &middot; '+esc(s.vendor)):'')+(s.sku?(' &middot; '+esc(s.sku)):'')+listed+'</div></div>';
+      var b=btn('Add','sm',function(){addFromSug(s,b);});
+      row.appendChild(b);$('prodList').appendChild(row);
+    });
+  }).catch(function(){$('prodList').innerHTML='<p class="muted">Could not search.</p>';});
 }
 
 /* tabs */

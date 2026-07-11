@@ -300,6 +300,28 @@ async function apiSuggestions(env, url) {
   catch (e) { return json({ error: 'shopify', plain: 'Couldn’t read Shopify just now. Try again in a moment.' }, e.status || 500); }
 }
 
+/* Search the whole Shopify catalogue (not just recent/low) so any known title
+   can be found and added to the reorder list. */
+async function shopProductSearch(env, term) {
+  const t = term.replace(/["\\]/g, ' ').trim();
+  const q = t.split(/\s+/).filter(Boolean).map((w) => 'title:*' + w + '*').join(' AND ') || t;
+  const gql = 'query($q:String!){ products(first:40, query:$q, sortKey:TITLE){ nodes{ title vendor productType variants(first:1){ nodes{ sku barcode inventoryQuantity title } } } } }';
+  const data = await shopifyGraphql(env, gql, { q });
+  const out = [];
+  for (const p of ((data && data.products && data.products.nodes) || [])) {
+    const v = (p.variants && p.variants.nodes && p.variants.nodes[0]) || {};
+    out.push({ title: p.title || '', vendor: p.vendor || '', sku: v.sku || '', inv: (typeof v.inventoryQuantity === 'number' ? v.inventoryQuantity : null), variantTitle: (v.title && v.title !== 'Default Title') ? v.title : '' });
+  }
+  return out;
+}
+async function apiProductSearch(env, url) {
+  if (!(await shopToken(env))) return json({ error: 'shop_not_connected' }, 400);
+  const term = (url.searchParams.get('q') || '').trim();
+  if (term.length < 2) return json({ items: [] });
+  try { return json({ items: await shopProductSearch(env, term) }); }
+  catch (e) { return json({ error: 'shopify', plain: 'Couldn’t search Shopify just now. Try again.' }, e.status || 500); }
+}
+
 /* ---------------- router ---------------- */
 export default {
   async fetch(request, env) {
@@ -330,6 +352,7 @@ export default {
       if (path === '/api/items/delete' && request.method === 'POST') return apiDeleteItem(env, request);
       if (path === '/api/suppliers' && request.method === 'POST') return apiSuppliers(env, request);
       if (path === '/api/suggestions' && request.method === 'GET') return apiSuggestions(env, url);
+      if (path === '/api/product-search' && request.method === 'GET') return apiProductSearch(env, url);
       if (path === '/api/disconnect' && request.method === 'POST') { await env.STORE.delete('tokens:shop'); return json({ ok: true }); }
     }
     return new Response('Not found', { status: 404 });
