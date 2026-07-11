@@ -70,11 +70,13 @@
 
   <!-- Suggestions -->
   <div class="card" id="sugCard">
-    <div class="row">
+    <div class="row" id="sugHead" style="cursor:pointer">
+      <span id="sugChevron" style="width:14px;display:inline-block;color:var(--muted)">▾</span>
       <h2 style="margin:0">Suggested reorders</h2>
       <span class="spacer"></span>
-      <span class="muted" style="font-size:13px">sold in last 60 days &amp; low on stock</span>
+      <span class="muted" style="font-size:13px">sold recently &amp; low on stock</span>
     </div>
+    <div id="sugContent">
     <div id="sugConnect" class="hide" style="margin-top:12px">
       <p class="muted" style="font-size:14px;margin:6px 0 12px">Connect Shopify (read-only) to see what's selling and running low, so nobody has to guess.</p>
       <button class="btn orange" id="connectShop">Connect Shopify</button>
@@ -96,6 +98,7 @@
         <button class="btn ghost sm" id="refreshSug">Refresh</button>
       </div>
       <div id="sugList"></div>
+    </div>
     </div>
   </div>
 
@@ -293,6 +296,10 @@ $('addSupBtn').onclick=function(){var n=$('newSup').value.trim();if(!n)return;ap
 
 /* ---- suggestions ---- */
 $('connectShop').onclick=function(){window.location.href='/auth/shop/start';};
+var sugCollapsed=false;try{sugCollapsed=localStorage.getItem('wax_sug_collapsed')==='1';}catch(e){}
+function applySugCollapse(){$('sugContent').classList.toggle('hide',sugCollapsed);$('sugChevron').textContent=sugCollapsed?'▸':'▾';}
+$('sugHead').onclick=function(){sugCollapsed=!sugCollapsed;try{localStorage.setItem('wax_sug_collapsed',sugCollapsed?'1':'0');}catch(e){}applySugCollapse();};
+applySugCollapse();
 var sugRaw=[],sugWindowLabel='in 60d';
 $('refreshSug').onclick=loadSug;
 ['minsold','sugsort','sugsearch','hidelisted','cond'].forEach(function(id){var e=$(id);e.oninput=renderSug;e.onchange=renderSug;});
