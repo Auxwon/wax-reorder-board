@@ -312,7 +312,7 @@ function renderSug(){
   var arr=sugRaw.filter(function(s){
     if((s.sold||0)<min)return false;
     if(hide&&onList(s))return false;
-    if(cond!=='all'){var mint=/mint \(m\)/i.test(s.title||'');if(cond==='new'&&!mint)return false;if(cond==='used'&&mint)return false;}
+    if(cond!=='all'){var used=/\((NM|M-|VG\+|VG|G\+|G|F|P)\)/i.test(s.title||'');if(cond==='new'&&used)return false;if(cond==='used'&&!used)return false;}
     if(q){var hay=((s.title||'')+' '+(s.variantTitle||'')+' '+(s.vendor||'')+' '+(s.sku||'')).toLowerCase();if(hay.indexOf(q)<0)return false;}
     return true;
   });
