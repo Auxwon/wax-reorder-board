@@ -174,10 +174,11 @@ async function shopName(env) {
 /* "What sold and is now low": walk orders (last 60d), sum sold per variant and
    read each variant's current inventory in the same pass, then keep the ones
    at or below the threshold, busiest sellers first. */
-async function shopSuggestions(env, threshold, days) {
-  const win = [30, 60, 90].indexOf(days) >= 0 ? days : 60;
-  const since = new Date(Date.now() - win * 86400000).toISOString().slice(0, 10);
-  const q = 'query($cursor:String){ orders(first:60, sortKey:CREATED_AT, query:"created_at:>=' + since + ' -status:cancelled", after:$cursor){ pageInfo{ hasNextPage endCursor } nodes{ lineItems(first:50){ nodes{ quantity sku title variant{ id sku title inventoryQuantity product{ title vendor isGiftCard productType } } } } } } }';
+async function shopSuggestions(env, threshold, fromDate, untilDate) {
+  const from = /^\d{4}-\d{2}-\d{2}$/.test(fromDate) ? fromDate : new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
+  const until = /^\d{4}-\d{2}-\d{2}$/.test(untilDate) ? untilDate : '';
+  const range = 'created_at:>=' + from + (until ? ' created_at:<=' + until : '');
+  const q = 'query($cursor:String){ orders(first:60, sortKey:CREATED_AT, query:"' + range + ' -status:cancelled", after:$cursor){ pageInfo{ hasNextPage endCursor } nodes{ lineItems(first:50){ nodes{ quantity sku title variant{ id sku title inventoryQuantity product{ title vendor isGiftCard productType } } } } } } }';
   const agg = {};
   let cursor = null, pages = 0;
   do {
@@ -288,8 +289,14 @@ async function apiDeleteItem(env, request) {
 async function apiSuggestions(env, url) {
   if (!(await shopToken(env))) return json({ error: 'shop_not_connected' }, 400);
   const th = Math.max(0, Math.min(50, parseInt(url.searchParams.get('threshold') || '3', 10)));
-  const days = parseInt(url.searchParams.get('days') || '60', 10);
-  try { return json({ items: await shopSuggestions(env, th, days), threshold: th, days: days }); }
+  let from = url.searchParams.get('from') || '';
+  let until = url.searchParams.get('to') || '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) {
+    const days = [30, 60, 90].indexOf(parseInt(url.searchParams.get('days') || '60', 10)) >= 0 ? parseInt(url.searchParams.get('days'), 10) : 60;
+    from = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+    until = '';
+  }
+  try { return json({ items: await shopSuggestions(env, th, from, until) }); }
   catch (e) { return json({ error: 'shopify', plain: 'Couldn’t read Shopify just now. Try again in a moment.' }, e.status || 500); }
 }
 

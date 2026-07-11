@@ -82,9 +82,10 @@
     <div id="sugBody" class="hide" style="margin-top:12px">
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:8px">
         <div><label>Stock at or below</label><input type="number" id="threshold" value="3" min="0" max="50"></div>
-        <div><label>Sold in last</label><select id="days"><option value="30">30 days</option><option value="60" selected>60 days</option><option value="90">90 days</option></select></div>
+        <div><label>Sold in last</label><select id="days"><option value="30">30 days</option><option value="60" selected>60 days</option><option value="90">90 days</option><option value="custom">Custom…</option></select></div>
         <div><label>Sold at least</label><input type="number" id="minsold" value="1" min="0"></div>
-        <div><label>Sort by</label><select id="sugsort"><option value="sold">Busiest sellers</option><option value="stock">Lowest stock</option><option value="az">A–Z</option></select></div>
+        <div><label>Sort by</label><select id="sugsort"><option value="sold">Best sellers</option><option value="stock">Lowest stock</option><option value="az">A–Z</option></select></div>
+        <div id="customDates" class="hide" style="grid-column:1/-1"><div class="row" style="gap:10px"><div style="flex:1"><label>From</label><input type="date" id="fromDate"></div><div style="flex:1"><label>To</label><input type="date" id="toDate"></div></div></div>
         <div style="grid-column:1/-1"><label>Search</label><input id="sugsearch" placeholder="artist, title, label, SKU…"></div>
       </div>
       <div class="row" style="margin-bottom:8px">
@@ -276,14 +277,28 @@ $('addSupBtn').onclick=function(){var n=$('newSup').value.trim();if(!n)return;ap
 
 /* ---- suggestions ---- */
 $('connectShop').onclick=function(){window.location.href='/auth/shop/start';};
-var sugRaw=[],sugDays=60;
+var sugRaw=[],sugWindowLabel='in 60d';
 $('refreshSug').onclick=loadSug;
 ['minsold','sugsort','sugsearch','hidelisted'].forEach(function(id){var e=$(id);e.oninput=renderSug;e.onchange=renderSug;});
-$('threshold').onchange=loadSug;$('days').onchange=loadSug;
+$('threshold').onchange=loadSug;
+$('fromDate').onchange=loadSug;$('toDate').onchange=loadSug;
+$('days').onchange=function(){
+  var custom=$('days').value==='custom';
+  $('customDates').classList.toggle('hide',!custom);
+  if(custom&&!$('fromDate').value){$('toDate').value=iso(new Date());$('fromDate').value=iso(new Date(Date.now()-60*86400000));}
+  loadSug();
+};
+function iso(d){return d.toISOString().slice(0,10);}
+function fmtWin(f,t){function d(x){var p=x.split('-');return p[2]+'/'+p[1];}return 'in '+d(f)+'–'+d(t);}
 function loadSug(){
-  var th=$('threshold').value||3; sugDays=parseInt($('days').value,10)||60;
+  var th=$('threshold').value||3, qs='threshold='+encodeURIComponent(th);
+  if($('days').value==='custom'){
+    var f=$('fromDate').value,t=$('toDate').value;
+    if(!f||!t){$('sugList').innerHTML='<p class="muted" style="padding:8px 0">Pick both a From and To date.</p>';return;}
+    qs+='&from='+encodeURIComponent(f)+'&to='+encodeURIComponent(t);sugWindowLabel=fmtWin(f,t);
+  }else{ qs+='&days='+encodeURIComponent($('days').value); sugWindowLabel='in '+$('days').value+'d'; }
   $('sugList').innerHTML='<p class="muted" style="padding:8px 0">Reading Shopify…</p>';$('sugCount').textContent='';
-  api('/api/suggestions?threshold='+encodeURIComponent(th)+'&days='+encodeURIComponent(sugDays)).then(function(r){
+  api('/api/suggestions?'+qs).then(function(r){
     if(r.error){sugRaw=[];$('sugList').innerHTML='<p class="muted">'+esc(r.plain||'Could not load suggestions.')+'</p>';return;}
     sugRaw=r.items||[];renderSug();
   }).catch(function(){sugRaw=[];$('sugList').innerHTML='<p class="muted">Could not load suggestions.</p>';});
@@ -307,7 +322,7 @@ function renderSug(){
     var row=document.createElement('div');row.className='sug';
     var low=s.inv<=0?'#c0392b':(s.inv<=2?'#c98a1a':'#8a7f74');
     row.innerHTML='<div class="g"><div class="t">'+esc(s.title)+(s.variantTitle?(' — '+esc(s.variantTitle)):'')+'</div>'+
-      '<div class="meta"><span class="lowdot" style="color:'+low+'">'+s.inv+' in stock</span> &middot; sold '+s.sold+' in '+sugDays+'d'+(s.vendor?(' &middot; '+esc(s.vendor)):'')+(s.sku?(' &middot; '+esc(s.sku)):'')+'</div></div>';
+      '<div class="meta"><span class="lowdot" style="color:'+low+'">'+s.inv+' in stock</span> &middot; sold '+s.sold+' '+sugWindowLabel+(s.vendor?(' &middot; '+esc(s.vendor)):'')+(s.sku?(' &middot; '+esc(s.sku)):'')+'</div></div>';
     var b=btn('Add','sm',function(){addFromSug(s,b);});
     row.appendChild(b);box.appendChild(row);
   });
