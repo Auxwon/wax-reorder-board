@@ -178,7 +178,7 @@ async function shopSuggestions(env, threshold, fromDate, untilDate) {
   const from = /^\d{4}-\d{2}-\d{2}$/.test(fromDate) ? fromDate : new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
   const until = /^\d{4}-\d{2}-\d{2}$/.test(untilDate) ? untilDate : '';
   const range = 'created_at:>=' + from + (until ? ' created_at:<=' + until : '');
-  const q = 'query($cursor:String){ orders(first:60, sortKey:CREATED_AT, query:"' + range + ' -status:cancelled", after:$cursor){ pageInfo{ hasNextPage endCursor } nodes{ lineItems(first:50){ nodes{ quantity sku title variant{ id sku title inventoryQuantity product{ title vendor isGiftCard productType } } } } } } }';
+  const q = 'query($cursor:String){ orders(first:60, sortKey:CREATED_AT, query:"' + range + ' -status:cancelled", after:$cursor){ pageInfo{ hasNextPage endCursor } nodes{ lineItems(first:50){ nodes{ quantity sku title variant{ id sku barcode title inventoryQuantity product{ title vendor isGiftCard productType } } } } } } }';
   const agg = {};
   let cursor = null, pages = 0;
   do {
@@ -187,7 +187,7 @@ async function shopSuggestions(env, threshold, fromDate, untilDate) {
     for (const o of (orders.nodes || [])) {
       for (const li of ((o.lineItems && o.lineItems.nodes) || [])) {
         const v = li.variant; if (!v || !v.id) continue;
-        const e = agg[v.id] || { sold: 0, inv: v.inventoryQuantity, title: (v.product && v.product.title) || li.title || 'Item', variantTitle: (v.title && v.title !== 'Default Title') ? v.title : '', sku: v.sku || li.sku || '', vendor: (v.product && v.product.vendor) || '', giftCard: !!(v.product && v.product.isGiftCard), productType: (v.product && v.product.productType) || '' };
+        const e = agg[v.id] || { sold: 0, inv: v.inventoryQuantity, title: (v.product && v.product.title) || li.title || 'Item', variantTitle: (v.title && v.title !== 'Default Title') ? v.title : '', sku: v.sku || li.sku || '', barcode: v.barcode || '', vendor: (v.product && v.product.vendor) || '', giftCard: !!(v.product && v.product.isGiftCard), productType: (v.product && v.product.productType) || '' };
         e.sold += (li.quantity || 0);
         if (typeof v.inventoryQuantity === 'number') e.inv = v.inventoryQuantity;
         agg[v.id] = e;
@@ -238,6 +238,8 @@ function cleanItem(input, base) {
   if ('title' in input) out.title = s(input.title, 200);
   if ('variantTitle' in input) out.variantTitle = s(input.variantTitle, 120);
   if ('sku' in input) out.sku = s(input.sku, 80);
+  if ('barcode' in input) out.barcode = s(input.barcode, 40);
+  if ('catno' in input) out.catno = s(input.catno, 80);
   if ('supplier' in input) out.supplier = s(input.supplier, 120);
   if ('orderedBy' in input) out.orderedBy = s(input.orderedBy, 60);
   if ('note' in input) out.note = s(input.note, 400);
@@ -262,7 +264,7 @@ async function apiAddItem(env, request) {
   let body; try { body = await request.json(); } catch (e) { return json({ ok: false }, 400); }
   const items = await getItems(env);
   const now = new Date().toISOString();
-  const item = cleanItem(body || {}, { id: newId(), title: '', variantTitle: '', sku: '', supplier: '', qty: 1, unitCost: 0, orderedBy: '', note: '', eta: '', status: 'to_order', source: body && body.source === 'shopify' ? 'shopify' : 'manual', createdAt: now, updatedAt: now });
+  const item = cleanItem(body || {}, { id: newId(), title: '', variantTitle: '', sku: '', barcode: '', catno: '', supplier: '', qty: 1, unitCost: 0, orderedBy: '', note: '', eta: '', status: 'to_order', source: body && body.source === 'shopify' ? 'shopify' : 'manual', createdAt: now, updatedAt: now });
   if (!item.title) return json({ ok: false, error: 'title required' }, 400);
   items.unshift(item);
   await saveItems(env, items);
@@ -310,7 +312,7 @@ async function shopProductSearch(env, term) {
   const out = [];
   for (const p of ((data && data.products && data.products.nodes) || [])) {
     const v = (p.variants && p.variants.nodes && p.variants.nodes[0]) || {};
-    out.push({ title: p.title || '', vendor: p.vendor || '', sku: v.sku || '', inv: (typeof v.inventoryQuantity === 'number' ? v.inventoryQuantity : null), variantTitle: (v.title && v.title !== 'Default Title') ? v.title : '' });
+    out.push({ title: p.title || '', vendor: p.vendor || '', sku: v.sku || '', barcode: v.barcode || '', inv: (typeof v.inventoryQuantity === 'number' ? v.inventoryQuantity : null), variantTitle: (v.title && v.title !== 'Default Title') ? v.title : '' });
   }
   return out;
 }

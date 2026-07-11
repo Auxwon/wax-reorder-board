@@ -221,11 +221,11 @@ function slug(s){return String(s).replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'
 function statusLabel(s){return s==='ordered'?'Ordered':(s==='received'?'Received':'To order');}
 function csvCell(v){v=(v==null?'':String(v));return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}
 function itemsToCsv(items){
-  var head=['Item','Variant','SKU','Supplier','Qty','Unit cost','Line total','Status','Ordered by','ETA','Note'];
+  var head=['Item','Variant','Cat #','Barcode','SKU','Supplier','Qty','Unit cost','Line total','Status','Ordered by','ETA','Note'];
   var rows=[head.join(',')];
   items.forEach(function(i){
     var line=(Number(i.qty)||0)*(Number(i.unitCost)||0);
-    rows.push([i.title,i.variantTitle,i.sku,i.supplier,i.qty,Number(i.unitCost||0).toFixed(2),line.toFixed(2),statusLabel(i.status),i.orderedBy,i.eta,i.note].map(csvCell).join(','));
+    rows.push([i.title,i.variantTitle,i.catno,i.barcode,i.sku,i.supplier,i.qty,Number(i.unitCost||0).toFixed(2),line.toFixed(2),statusLabel(i.status),i.orderedBy,i.eta,i.note].map(csvCell).join(','));
   });
   return rows.join('\r\n');
 }
@@ -237,6 +237,8 @@ function itemEl(i){
   var line=(Number(i.qty)||0)*(Number(i.unitCost)||0);
   var sub=[];
   if(i.variantTitle)sub.push(esc(i.variantTitle));
+  if(i.catno)sub.push('Cat# '+esc(i.catno));
+  if(i.barcode)sub.push('BC '+esc(i.barcode));
   if(i.sku)sub.push('SKU '+esc(i.sku));
   if(i.supplier)sub.push('from '+esc(i.supplier));
   var money2=(i.qty||0)+' × '+money(i.unitCost)+' = '+money(line);
@@ -260,10 +262,10 @@ function editRow(d,i){
   var e=document.createElement('div');e.className='edit';
   e.innerHTML='<div class="grid">'+
     '<div><label>Supplier</label><select id="e_sup">'+supOptions(i.supplier)+'</select></div>'+fld('Qty','e_qty',i.qty,'number')+fld('Unit cost ($)','e_cost',i.unitCost,'number')+
-    fld('Ordered by','e_by',i.orderedBy)+fld('ETA','e_eta',i.eta)+fld('Note','e_note',i.note)+'</div>'+
+    fld('Cat #','e_catno',i.catno)+fld('Ordered by','e_by',i.orderedBy)+fld('ETA','e_eta',i.eta)+fld('Note','e_note',i.note)+'</div>'+
     '<div class="row" style="margin-top:10px"></div>';
   var r=e.querySelector('.row');
-  r.appendChild(btn('Save','orange sm',function(){upd(i.id,{supplier:e.querySelector('#e_sup').value,qty:e.querySelector('#e_qty').value,unitCost:e.querySelector('#e_cost').value,orderedBy:e.querySelector('#e_by').value,eta:e.querySelector('#e_eta').value,note:e.querySelector('#e_note').value});}));
+  r.appendChild(btn('Save','orange sm',function(){upd(i.id,{supplier:e.querySelector('#e_sup').value,catno:e.querySelector('#e_catno').value,qty:e.querySelector('#e_qty').value,unitCost:e.querySelector('#e_cost').value,orderedBy:e.querySelector('#e_by').value,eta:e.querySelector('#e_eta').value,note:e.querySelector('#e_note').value});}));
   r.appendChild(btn('Cancel','ghost sm',function(){e.remove();}));
   d.appendChild(e);
 }
@@ -341,7 +343,7 @@ function renderSug(){
 }
 function addFromSug(s,b){
   b.disabled=true;b.textContent='Added';
-  api('/api/items','POST',{title:s.title,variantTitle:s.variantTitle,sku:s.sku,supplier:'',qty:1,unitCost:0,note:s.vendor?('Label: '+s.vendor):'',source:'shopify'}).then(function(){toast('Added to list');load().then(renderSug);});
+  api('/api/items','POST',{title:s.title,variantTitle:s.variantTitle,sku:s.sku,barcode:s.barcode||'',supplier:'',qty:1,unitCost:0,note:s.vendor?('Label: '+s.vendor):'',source:'shopify'}).then(function(){toast('Added to list');load().then(renderSug);});
 }
 
 /* ---- search all products ---- */
