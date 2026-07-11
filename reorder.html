@@ -212,7 +212,7 @@ function renderGrouped(box,items){
     var h=document.createElement('div');h.className='row';h.style.margin='18px 0 8px';
     h.innerHTML='<h2 style="margin:0">'+esc(k)+'</h2><span class="muted" style="font-size:13px">'+g.length+' item'+(g.length===1?'':'s')+' &middot; '+money(sub)+'</span>';
     var sp=document.createElement('span');sp.className='spacer';h.appendChild(sp);
-    h.appendChild(btn('Export CSV','sm',function(){download('reorder-'+slug(k)+'.csv',itemsToCsv(g));}));
+    h.appendChild(btn('Export CSV','sm',function(){download(orderFile(k==='(no supplier)'?'Unassigned':k),itemsToCsv(g));}));
     box.appendChild(h);
     g.forEach(function(i){box.appendChild(itemEl(i));});
   });
@@ -230,7 +230,10 @@ function itemsToCsv(items){
   return rows.join('\r\n');
 }
 function download(name,text){var b=new Blob(['﻿'+text],{type:'text/csv;charset=utf-8;'});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(a.href);},120);}
-function exportAll(){var items=state.items.filter(function(i){return filter==='all'?true:i.status===filter;});if(!items.length){toast('Nothing to export');return;}items=items.slice().sort(function(a,b){return (a.supplier||'').localeCompare(b.supplier||'');});download('reorder-list.csv',itemsToCsv(items));toast('Exported');}
+function today(){return new Date().toISOString().slice(0,10);}
+function safeName(s){return String(s||'').replace(/[\/\\:*?"<>|]+/g,' ').replace(/\s+/g,' ').trim()||'items';}
+function orderFile(name){return 'Wax Reorder - '+safeName(name)+' - '+today()+'.csv';}
+function exportAll(){var items=state.items.filter(function(i){return filter==='all'?true:i.status===filter;});if(!items.length){toast('Nothing to export');return;}items=items.slice().sort(function(a,b){return (a.supplier||'').localeCompare(b.supplier||'');});download(orderFile('All suppliers'),itemsToCsv(items));toast('Exported');}
 function statusPill(s){if(s==='ordered')return '<span class="pill p-or">Ordered</span>';if(s==='received')return '<span class="pill p-re">Received</span>';return '<span class="pill p-to">To order</span>';}
 function itemEl(i){
   var d=document.createElement('div');d.className='item';
